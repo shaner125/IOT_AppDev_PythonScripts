@@ -12,7 +12,7 @@ from light_sensor import *
 from rotary import *
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTShadowClient
 
-HOME_PATH = '/home/pi/aws-iot-grovepi/'
+HOME_PATH = '/home/pi/Documents/aws-iot-grovepi/'
 ca = HOME_PATH + 'root-CA.crt'
 crt = HOME_PATH + '8cb204735c-certificate.pem.crt'
 key = HOME_PATH + '8cb204735c-private.pem.key'
@@ -35,29 +35,82 @@ def custom_shadow_callback_update(payload, responseStatus, token):
 def custom_shadow_callback_delta(payload, responseStatus, token):
     # payload is a JSON string ready to be parsed using json.loads(...)
     # in both Py2.x and Py3.x
-    print "There is a shadow delta detected"
-    global LIGHTSHADOW
-    global SOUNDSHADOW
-    global ULTRASHADOW
-    global ROTARYSHADOW
+    global LIGHTDELTA
+    global SOUNDDELTA
+    global ULTRADELTA
+    global ROTARYDELTA
+    global light_status
+    global sound_status
+    global rotary_status
+    global ultra_status
     payload_dict = json.loads(payload)
-    if 'lighton' in payload_dict["state"]:
-        LIGHTSHADOW = int(payload_dict["state"]["lighton"])
-        print "Updating LIGHTSHADOW to " + str(LIGHTSHADOW) + " to resolve the delta"
+    if 'soundDelta' in payload_dict["state"]:
+        SOUNDDELTA = int(payload_dict["state"]["soundDelta"])
+    if 'lightDelta' in payload_dict["state"]:
+        LIGHTDELTA = int(payload_dict["state"]["lightDelta"])
+    if 'ultraDelta' in payload_dict["state"]:
+        ULTRADELTA = int(payload_dict["state"]["ultraDelta"])
+    if 'rotaryDelta' in payload_dict["state"]:
+        ROTARYDELTA = int(payload_dict["state"]["rotaryDelta"])
+    if 'rotaryStatus' in payload_dict["state"]:
+        rotary_status = int(payload_dict["state"]["rotaryStatus"])
+    if 'lightStatus' in payload_dict["state"]:
+        light_status = int(payload_dict["state"]["lightStatus"])
+    if 'soundStatus' in payload_dict["state"]:
+        sound_status = int(payload_dict["state"]["soundStatus"])
+    if 'ultraStatus' in payload_dict["state"]:
+        ultra_status = int(payload_dict["state"]["ultraStatus"])
 
-# Connect the Grove LED to digital port D3
-BUTTON = 8
-LED = 3
+def soundControl():
+    while True:
+        if sound_status == 1:
+            time.sleep(SOUNDDELTA)
+            JSONPAYLOAD = SoundSensor().get_sound()
+            time.sleep(.2)
+            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
+        elif sound_status == 0:
+            time.sleep(SOUNDDELTA)
+
+def lightControl():
+    while True:
+        if light_status == 1:
+            time.sleep(LIGHTDELTA)
+            JSONPAYLOAD = LightSensor().get_reading()
+            time.sleep(.2)
+            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
+        elif light_status == 0:
+            time.sleep(LIGHTDELTA)
+
+def ultraControl():
+    while True:
+        if ultra_status == 1:
+            time.sleep(ULTRADELTA)
+            JSONPAYLOAD = UltraSensor().get_reading()
+            time.sleep(.2)
+            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
+        elif ultra_status == 0:
+            time.sleep(ULTRADELTA)
+
+def rotaryControl():
+    while True:
+        if rotary_status == 1:
+            time.sleep(ROTARYDELTA)
+            JSONPAYLOAD = RotarySensor().get_reading()
+            time.sleep(.2)
+            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
+        elif rotary_status == 0:
+            time.sleep(ROTARYDELTA)
+
 
 # Initialize the hardware and variables
-pinMode(LED, "OUTPUT")
-pinMode(BUTTON, "INPUT")
-BUTTONSTATE = 0
-BUTTONPRESSEDCOUNT = 0
-LIGHTSHADOW = 0
-SOUNDSHADOW = 0
-ULTRASHADOW = 0
-ROTARYSHADOW = 0
+LIGHTDELTA = 4
+SOUNDDELTA = 4
+ULTRADELTA = 4
+ROTARYDELTA = 4
+sound_status = 1
+light_status = 1
+rotary_status = 1
+ultra_status = 1
 
 # set up AWS IoT certificate-based connection
 MY_MQTT_SHADOW_CLIENT = AWSIoTMQTTShadowClient(iot_thing_name)
@@ -70,77 +123,14 @@ MY_MQTT_SHADOW_CLIENT.connect()
 DEVICESHADOWHANDLER = MY_MQTT_SHADOW_CLIENT.createShadowHandlerWithName(iot_thing_name, True)
 DEVICESHADOWHANDLER.shadowRegisterDeltaCallback(custom_shadow_callback_delta)
 
-print "This example will turn a LED on and off with button presses / IoT shadow deltas"
-print "Connect the Button to port D" + str(BUTTON)
-print "Connect the LED to the port D" + str(LED)
-print "Connect the LED to the port D" + str(SOUND)
-
 # do our initial report that the light is off
 LASTREPORTTIME = datetime.datetime.utcnow()
-print "Initial reporting LIGHTSHADOW = " + str(LIGHTSHADOW)
-print "Initial reporting SOUNDSHADOW = " + str(SOUNDSHADOW)
-print "Initial reporting ULTRASHADOW = " + str(ULTRASHADOW)
-JSONPAYLOAD = '{"state":{"reported":{"lighton":0}}}'
-JSONPAYLOADSOUND = '{"state":{"reported":{"sound":0}}}'
-JSONPAYLOADULTRA = '{"state":{"reported":{"ultra":0}}}'
 
-DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOADSOUND, custom_shadow_callback_update, 5)
-DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOADULTRA, custom_shadow_callback_update, 5)
-
-while True:
-    try:
-        # check if the button is pressed
-        BUTTONSTATE = digitalRead(BUTTON)
-        # if it is pressed wait for the release before toggling
-        if BUTTONSTATE == 1:
-            while digitalRead(BUTTON) == 1:
-                BUTTONPRESSEDCOUNT = BUTTONPRESSEDCOUNT + 1
-
-            if LIGHTSHADOW == 0:
-                # LIGHTSHADOW = 1
-                JSONPAYLOAD = '{"state":{"desired":{"lighton":1}}}'
-                DEVICESHADOWHANDLER.shadowUpdate(
-                    JSONPAYLOAD, custom_shadow_callback_update, 5)
-                print "Light desired state toggled on by local switch"
-            else:
-                # LIGHTSHADOW = 0
-                JSONPAYLOAD = '{"state":{"desired":{"lighton":0}}}'
-                DEVICESHADOWHANDLER.shadowUpdate(
-                    JSONPAYLOAD, custom_shadow_callback_update, 5)
-                print "Light desired state toggled off by local switch"
-
-        # change the light to reflect its local shadow
-        digitalWrite(LED, LIGHTSHADOW)
-
-        # work out the time delta between last update and now
-        CURRENTTIME = datetime.datetime.utcnow()
-        TIMEDELTA = CURRENTTIME - LASTREPORTTIME
-
-        # every 2 seconds report the current state to AWS IoT
-        if TIMEDELTA.seconds > 4:
-            print "Reporting LIGHTSHADOW " + str(LIGHTSHADOW)
-            if LIGHTSHADOW == 0:
-                JSONPAYLOAD = '{"state":{"reported":{"lighton":0}}}'
-            if LIGHTSHADOW == 1:
-                JSONPAYLOAD = '{"state":{"reported":{"lighton":1}}}'
-            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-            JSONPAYLOAD = SoundSensor().get_sound()
-            time.sleep(.5)
-            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-            JSONPAYLOAD = UltraSensor().get_reading()
-            time.sleep(.5)
-            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-            JSONPAYLOAD = RotarySensor().get_reading()
-            time.sleep(.5)
-            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-            JSONPAYLOAD = LightSensor().get_reading()
-            time.sleep(.5)
-            DEVICESHADOWHANDLER.shadowUpdate(JSONPAYLOAD, custom_shadow_callback_update, 5)
-            LASTREPORTTIME = datetime.datetime.utcnow()
-
-    except KeyboardInterrupt:
-        digitalWrite(LED, 0)
-        break
-    except IOError:
-        print "Error"
+t = threading.Thread(target=soundControl)
+t.start()
+t1 = threading.Thread(target=lightControl)
+t1.start()
+t2 = threading.Thread(target=ultraControl)
+t2.start()
+t3 = threading.Thread(target=rotaryControl)
+t3.start()

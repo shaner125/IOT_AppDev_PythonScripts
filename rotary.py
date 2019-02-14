@@ -19,7 +19,7 @@ class RotarySensor():
 
             #calculute rotation (0-300)
             degrees = round((voltage * full_angle) / grove_vcc, 2)
-            JSONPayload = '{"state":{"reported":{"rotary_angle":'+str(degrees)+'}}}'
+            JSONPayload = '{"state":{"reported":{"rotaryValue":'+str(degrees)+'}}}'
         except IOError:
             print ("Error")
         return JSONPayload

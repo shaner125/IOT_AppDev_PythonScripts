@@ -8,7 +8,7 @@ class UltraSensor():
     def get_reading(self):
         try:
             sensor_value = grovepi.ultrasonicRead(ULTRA)
-            JSONPayload = '{"state":{"reported":{"ultra":'+str(sensor_value)+'}}}'
+            JSONPayload = '{"state":{"reported":{"ultraValue":'+str(sensor_value)+'}}}'
         except IOError:
             print ("Error")
         return JSONPayload
